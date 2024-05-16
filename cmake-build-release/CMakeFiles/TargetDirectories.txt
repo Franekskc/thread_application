@@ -1,0 +1,5 @@
+/home/franekskc/Pulpit/SO2/SO2_project/cmake-build-release/CMakeFiles/SO2_project.dir
+/home/franekskc/Pulpit/SO2/SO2_project/cmake-build-release/CMakeFiles/edit_cache.dir
+/home/franekskc/Pulpit/SO2/SO2_project/cmake-build-release/CMakeFiles/rebuild_cache.dir
+/home/franekskc/Pulpit/SO2/SO2_project/cmake-build-release/_deps/nlohmann_json-build/CMakeFiles/edit_cache.dir
+/home/franekskc/Pulpit/SO2/SO2_project/cmake-build-release/_deps/nlohmann_json-build/CMakeFiles/rebuild_cache.dir
