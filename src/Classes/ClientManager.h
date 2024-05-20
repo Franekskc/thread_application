@@ -26,7 +26,10 @@ private:
     std::vector<std::pair<Client*, std::thread>> clientsWithThreads;
     Elevator& elevator_;
     std::mutex mutex_;
+    std::condition_variable cv_;
+
     void removeStoppedClient(Client* client);
+    void joinClientAfterStopped(Client* clientToRemove);
 };
 
 #endif // CLIENT_MANAGER_HPP

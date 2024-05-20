@@ -10,34 +10,33 @@
 #include <random>
 #include <GLFW/glfw3.h>
 
+class Elevator;
+
 class Client {
+private:
+    float speed;
+    float color[3];
+    bool inElevator;
+    bool waitingForService;
+    bool inService;
+    Elevator& elevator_;
+    std::mutex mutex_;
+
+    std::condition_variable& cv_;
 
 public:
-    bool waitingForElevator = false;
-    bool inElevator = false;
-    bool waitingForService = false;
-    bool inService = false;
-    bool stopped = false;
-    float x, y;
-    explicit Client();
-    float* getColor() { return color; }
-    void visualize(GLFWwindow* window);
+    bool stopped;
+    float x;
+    float y;
+    Client(Elevator& elevator, std::condition_variable& cv);
     void run();
     void stop();
+    void move();
+    void visualize(GLFWwindow* window);
     void enterElevator();
     void quitElevator();
     void enterService();
-    // void quitService();
-
-private:
-    float speed;
-    float color[3]{};
-    std::mutex mutex_;
-
-    void move();
-
+    void quitService();
 };
-
-
 
 #endif // CLIENT_HPP

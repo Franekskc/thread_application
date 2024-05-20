@@ -1,5 +1,7 @@
 #include "Client.h"
 
+#include "Elevator.h"
+
 float elevatorX = -0.2f;
 float elevatorWidth = 0.3f;
 float floorX = 0.1f;
@@ -7,7 +9,8 @@ float serviceX = 0.6f;
 float serviceWidth = 0.3f;
 
 
-Client::Client() {
+
+Client::Client(Elevator& elevator, std::condition_variable& cv) : elevator_(elevator), cv_(cv) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis1(0.72,0.88);
@@ -25,20 +28,22 @@ Client::Client() {
 void Client::run() {
     while (!stopped) {
         if (this->x < elevatorX - 0.02f || (this->x > floorX && this->x < serviceX - 0.02f)) move();
-        else if (this->x < elevatorX) waitingForElevator = true;
-        else if (serviceX > this->x && this->x >= serviceX - 0.02f) {waitingForService = true;}
+        else if (this->x < elevatorX) enterElevator();
+        else if (this->x < elevatorX + elevatorWidth) quitElevator();
+        else if (serviceX > this->x && this->x >= serviceX - 0.02f) enterService();
         else if (this->inService) {
             inService = false;
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-            this->stop();
+            quitService();
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 void Client::stop() {
-    // printf("client.stop()\n");
+    std::lock_guard<std::mutex> lock(mutex_);
     this->stopped = true;
+    cv_.notify_all();
 }
 
 void Client::move() {
@@ -59,8 +64,11 @@ void Client::visualize(GLFWwindow* window) {
 }
 
 void Client::enterElevator() {
-    waitingForElevator = false;
+    std::unique_lock<std::mutex> lock(elevator_.getMutex());
+    elevator_.getConditionVariable().wait(lock, [this]() { return elevator_.canEnter || elevator_.stopped; });
+
     inElevator = true;
+    elevator_.addClientInside(this);
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(0.04f, elevatorWidth - 0.02f);
@@ -68,17 +76,20 @@ void Client::enterElevator() {
 }
 
 void Client::quitElevator() {
+    std::unique_lock<std::mutex> lock(elevator_.getMutex());
+    elevator_.getConditionVariable().wait(lock, [this]() { return elevator_.canExit || elevator_.stopped; });
+
     inElevator = false;
-    this->x = elevatorX+elevatorWidth + 0.02f;
+    elevator_.removeClientInside(this);
+    this->x = elevatorX + elevatorWidth + 0.02f;
 }
 
 void Client::enterService() {
-    waitingForService = false;
     inService = true;
     this->x = serviceX + serviceWidth/2;
 }
 
-// void Client::quitService() {
-//     inService = false;
-//     // this->stop();
-// }
+void Client::quitService() {
+    inService = false;
+    this->stop();
+}

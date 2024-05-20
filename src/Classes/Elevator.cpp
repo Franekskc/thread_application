@@ -5,6 +5,9 @@ float elevatorMinY = -0.95f;
 float elevatorMaxY = 0.75f;
 std::vector<float> floorsY = {0.3f, -0.2f, -0.7f};
 
+Elevator::Elevator() = default;
+
+
 void Elevator::run() {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -20,7 +23,8 @@ void Elevator::run() {
         if (std::abs(this->y - entranceY) < epsilon) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             allowEntry(true);
-            while (clientsInside.empty() && !stopped) {std::this_thread::sleep_for(std::chrono::milliseconds(50));}
+            std::unique_lock<std::mutex> lock(insideMtx);
+            cv_.wait(lock, [this] { return !clientsInside.empty() || stopped; });
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             allowEntry(false);
             move();
@@ -38,7 +42,7 @@ void Elevator::run() {
             randomIndex = dis(gen);
             destination = floorsY[randomIndex];
         } else {
-            std::unique_lock<std::mutex> lock(mutex_);
+            std::unique_lock<std::mutex> lock(mtx_);
             for (auto& client : clientsInside) {
                 client->y -= speed;
             }
@@ -50,20 +54,23 @@ void Elevator::run() {
 }
 
 void Elevator::stop() {
+    std::unique_lock<std::mutex> lock(mtx_);
     stopped = true;
-    for (auto& client: clientsInside) {
-        // printf("removeFromElevator\n");
-        removeClientInside(client);
-    }
+    cv_.notify_all();
 }
 
 void Elevator::allowEntry(bool allow) {
+    std::unique_lock<std::mutex> lock(mtx_);
     canEnter = allow;
-
+    lock.unlock();
+    cv_.notify_all();
 }
 
 void Elevator::allowExit(bool allow) {
+    std::unique_lock<std::mutex> lock(mtx_);
     canExit = allow;
+    lock.unlock();
+    cv_.notify_all();
 }
 
 void Elevator::move() {
@@ -100,17 +107,33 @@ void Elevator::visualise(GLFWwindow *window) {
 
 void Elevator::addClientInside(Client* client) {
     // Dodaj klienta do listy klientów wewnątrz windy
-    std::unique_lock<std::mutex> lock(mutex_);
-
+    std::unique_lock<std::mutex> lock(insideMtx);
     clientsInside.push_back(client);
+    cv_.notify_one();
 }
 
 void Elevator::removeClientInside(Client* client) {
-    // Usuń klienta z listy klientów wewnątrz windy
-    std::unique_lock<std::mutex> lock(mutex_);
+    // // Usuń klienta z listy klientów wewnątrz windy
+    // std::unique_lock<std::mutex> lock(mtx_);
+    std::unique_lock<std::mutex> lock(insideMtx);
     auto it = std::find(clientsInside.begin(), clientsInside.end(), client);
     if (it != clientsInside.end()) {
         clientsInside.erase(it); // Usuwamy obiekt z wektora
     }
+    cv_.notify_all();
 }
 
+void Elevator::cleanClientList() {
+    for (auto& client: clientsInside) {
+        // printf("removeFromElevator\n");
+        removeClientInside(client);
+    }
+}
+
+std::condition_variable& Elevator::getConditionVariable() {
+    return cv_;
+}
+
+std::mutex& Elevator::getMutex() {
+    return mtx_;
+}

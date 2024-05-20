@@ -1,22 +1,19 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <condition_variable>
 #include <GLFW/glfw3.h>
 #include "Classes/Client.h"
 #include "Classes/ClientManager.h"
 
 using namespace std;
 
-bool stopProgram = false; // flaga do zatrzymywania programu
-mutex mtx; // mutex do synchronizacji flagi
+condition_variable cv;
+mutex mtx;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
-        // Ustawienie flagi zatrzymującej program
-        {
-            lock_guard<mutex> lock(mtx);
-            stopProgram = true;
-        }
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
 
@@ -173,6 +170,8 @@ int main() {
     glfwSwapInterval(1);
     glfwSetKeyCallback(window, key_callback);
 
+    std::condition_variable cv;
+
     // Utworzenie obiektu windy
     Elevator elevator;
     thread elevatorThread(&Elevator::run, &elevator);
@@ -180,38 +179,36 @@ int main() {
     // Utworzenie obiektu menedżera klientów i watkow
     ClientManager clientManager(elevator);
 
+    // Utorzenie watku generatora nowych klientow
     thread generateClientThread(&ClientManager::generateClient, &clientManager);
-    thread clientManagerThread(&ClientManager::run, &clientManager);
 
 
     // Pętla główna programu
     while (!glfwWindowShouldClose(window)) {
-        // Sprawdzenie flagi zatrzymującej program
-        {
-            lock_guard<mutex> lock(mtx);
-            if (stopProgram) {
-                // Zatrzymanie windy i jej watku
-                elevator.stop();
-                elevatorThread.join();
-
-                // Zatrzymanie menedżera klientów i jego watku
-                clientManager.stop();
-                generateClientThread.join();
-                clientManagerThread.join();
-
-
-                // Zniszczenie okna i zakończenie GLFW
-                glfwDestroyWindow(window);
-                glfwTerminate();
-
-                return 0; // Zakończenie programu
-            }
-        }
+        // Rysowanie
         draw(window, clientManager, elevator);
-
-        // Oczekiwanie krótko przed kolejną klatką
-        this_thread::sleep_for(chrono::milliseconds(50));
+        // Oczekiwanie przez 50ms
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+
+
+    // Zatrzymanie menedżera klientów
+    clientManager.stop();
+    // Zatrzymanie windy
+    elevator.stop();
+
+    // Usuniecie klientow z windy
+    elevator.cleanClientList();
+
+    // Zatrzymanie watku menadzera klientow
+    generateClientThread.join();
+
+    // Zatrzymanie watku windy
+    elevatorThread.join();
+
+    // Zniszczenie okna i zakończenie GLFW
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
     return 0;
 }
